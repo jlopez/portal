@@ -22,9 +22,11 @@ Usage::
     portal listApps [-v | -r]
 
   Provisioning Profile Management:
-    portal listProfiles [-v | -r]
+    portal listProfiles [-v | -r] <filter-criteria>
     portal getProfile [-a | -i ID] [-o OUTPUT] [-q]
     portal regenerateProfile [-v | -q] [-n] [-a | [ID...]]
+    portal deleteProfile [-q] [-n] <filter-criteria>
+    filter-criteria: [-t type] [-i appId] [-r nameregex] [ID...]
 
 
 
@@ -56,3 +58,5 @@ Sample usage::
                                 # e.g. CERT_TYPE_IOS_DEVELOPMENT, etc.
   api.update_provisioning_profile(profile, ...) # update a provisioning profile
   api.download_profile(profile, path) # Download a provisioning profile
+  api.delete_provisioning_profile(...)
+  api.create_provisioning_profile(...)

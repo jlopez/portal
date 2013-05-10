@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import getopt
 import os
+import re
 import sys
 
 import portal
@@ -25,9 +26,11 @@ App ID Management
   portal listApps [-v | -r]
 
 Provisioning Profile Management:
-  portal listProfiles [-v | -r]
+  portal listProfiles [-v | -r] <filter-criteria>
   portal getProfile [-a | -i ID] [-o OUTPUT] [-q]
   portal regenerateProfile [-v | -q] [-n] [-a | [ID...]]
+  portal deleteProfile [-q] [-n] <filter-criteria>
+  filter-criteria: [-t type] [-i appId] [-r nameregex] [ID...]
     """)
 
 def camelcase_to_underscore(name):
@@ -39,9 +42,10 @@ CMDS = {
     'listCertificates': dict(getopt='vr'),
     'listDevices': dict(getopt='vr'),
     'listApps': dict(getopt='vr'),
-    'listProfiles': dict(getopt='vr'),
+    'listProfiles': dict(getopt='vrt:i:r:'),
     'getProfile': dict(getopt='qai:o:'),
     'regenerateProfile': dict(getopt='qanv'),
+    'deleteProfile': dict(getopt='nqt:i:r:'),
 }
 
 def main():
@@ -52,7 +56,9 @@ def main():
         cmd = sys.argv.pop(0)
         cmd_entry = CMDS.get(cmd)
         if cmd_entry is None:
-            error("Unknown command '%s'")
+            if cmd.startswith('-'):
+                error("Missing command before '%s'" % cmd)
+            error("Unknown command '%s'" % cmd)
         fn_name = 'cmd_%s' % camelcase_to_underscore(cmd).replace('-', '_')
         cmd_fn = globals()[fn_name]
         args = sys.argv
@@ -115,8 +121,11 @@ def cmd_list_devices():
         else:
             print '\t'.join(device[k] for k in keys)
 
-def cmd_list_profiles():
-    for profile in api.all_provisioning_profiles():
+def cmd_list_profiles(*args):
+    for profile in _filter_profiles(args, include_all=True):
+        if isinstance(profile, basestring):
+            print >>sys.stderr, "Profile '%s' not found" % profile
+            continue
         if 'r' in opts:
             print profile
         elif 'v' in opts:
@@ -126,13 +135,13 @@ def cmd_list_profiles():
                 profile['certificateCount'],
                 profile['deviceCount'],
                 profile['dateExpire'],
-                api.profile_type(profile),
+                api.profile_type_name(profile),
                 profile['appId']['identifier'],
                 profile['name']))
         else:
             print '\t'.join((
                 profile['provisioningProfileId'],
-                api.profile_type(profile),
+                api.profile_type_name(profile),
                 profile['appId']['identifier'],
                 profile['name']))
 
@@ -144,7 +153,7 @@ def cmd_get_profile():
         profiles = api.all_provisioning_profiles()
         for ix, profile in enumerate(profiles):
             identifier = profile['appId']['identifier']
-            filename = '%s.mobileprovision' % api.profile_type(profile)
+            filename = '%s.mobileprovision' % api.profile_type_name(profile)
             if identifier == '*':
                 filename = os.path.join(path, filename)
             else:
@@ -171,7 +180,7 @@ def cmd_regenerate_profile(*args):
         profile_id = profile['provisioningProfileId']
         if 'a' not in opts and profile_id not in args:
             continue
-        profile_type = api.profile_type(profile)
+        profile_type = api.profile_type_name(profile)
         devs = [] if profile_type == 'appstore' else devices
         if (not api.is_profile_expired(profile) and
                 profile['deviceCount'] == len(devs)):
@@ -189,3 +198,33 @@ def cmd_regenerate_profile(*args):
         if 'n' not in opts:
             api.update_provisioning_profile(profile,
                     device_ids=devs, certificate_ids=certs)
+
+def cmd_delete_profile(*args):
+    for profile in _filter_profiles(args):
+        if isinstance(profile, dict):
+            if 'q' not in opts:
+                print >>sys.stderr, "Deleting profile '%s'" % profile['provisioningProfileId']
+            if 'n' not in opts:
+                api.delete_provisioning_profile(profile)
+        else:
+            print >>sys.stderr, "Profile '%s' not found" % profile
+
+def _filter_profiles(args, include_all=False):
+    if not args and ('r' in opts or 'i' in opts or 't' in opts or include_all):
+        profiles = api.all_provisioning_profiles()
+    else:
+        profiles = api.get_provisioning_profile(args, return_id_if_missing=True)
+    if 'r' in opts:
+        profiles = [ p for p in profiles
+                     if not isinstance(p, dict) or
+                         re.match(opts['r'], p['name']) ]
+    if 'i' in opts:
+        profiles = [ p for p in profiles
+                     if not isinstance(p, dict) or
+                         p['appId']['identifier'] == opts['i'] ]
+    if 't' in opts:
+        profile_type = api.profile_type(opts['t'])
+        profiles = [ p for p in profiles
+                     if not isinstance(p, dict) or
+                         api.profile_type(p) == profile_type ]
+    return profiles

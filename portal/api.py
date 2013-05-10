@@ -175,32 +175,130 @@ class API(object):
                 includeRemovedDevices='true' if include_removed else 'false')
         return data['devices']
 
-    @cached_method
-    def all_cert_requests(self):
-        return self._list_cert_requests()
-
-    @cached_method
-    def all_app_ids(self):
-        return self._list_app_ids()
-
-    @cached_method
-    def all_provisioning_profiles(self):
-        return self._list_provisioning_profiles()
-
-    @cached_method
-    def all_devices(self):
-        return self._list_devices()
-
     def clear_cache(self):
         for n in self.__dict__:
             if n.endswith('_cache'):
                 delattr(self, n)
+
+    @cached_method
+    def all_cert_requests(self):
+        return self._list_cert_requests()
 
     def list_cert_requests(self, typ):
         if not isinstance(typ, list):
             typ = [ typ ]
         return [ c for c in self.all_cert_requests()
                  if c['certificateTypeDisplayId'] in typ ]
+
+    @cached_method
+    def all_app_ids(self):
+        return self._list_app_ids()
+
+    def get_app_id(self, app_id):
+        if isinstance(app_id, (list, tuple)):
+            return [ self.get_app_id(a) for a in app_id ]
+        if isinstance(app_id, dict):
+            return app_id
+        if not isinstance(app_id, basestring):
+            raise APIException('invalid app_id %s' % app_id)
+        try:
+            if '.' in app_id:
+                return next(a for a in self.all_app_ids()
+                            if a['identifier'] == app_id)
+            else:
+                return next(a for a in self.all_app_ids()
+                            if a['appIdId'] == app_id)
+        except StopIteration:
+            return None
+
+    @cached_method
+    def all_devices(self):
+        return self._list_devices()
+
+    @cached_method
+    def all_provisioning_profiles(self):
+        return self._list_provisioning_profiles()
+
+    def get_provisioning_profile(self, profile, return_id_if_missing=False):
+        if isinstance(profile, (list, tuple)):
+            return [ self.get_provisioning_profile(p,
+                         return_id_if_missing=return_id_if_missing)
+                     for p in profile ]
+        if isinstance(profile, dict):
+            return profile
+        if not isinstance(profile, basestring):
+            raise APIException('invalid profile id %s' % profile)
+        try:
+            return next(p for p in self.all_provisioning_profiles()
+                        if p['provisioningProfileId'] == profile)
+        except StopIteration:
+            if return_id_if_missing:
+                return profile
+            return None
+
+    def create_provisioning_profile(self, profile_type, app_id, certificates=None,
+            devices=None, name=None):
+        if not 0 <= profile_type < 3:
+            raise APIException('profile_type must be one of ' +
+              ', '.join(t for t in dir(API) if t.startswith('PROFILE_TYPE_')))
+        if not isinstance(app_id, (dict, basestring)):
+            raise APIException('invalid app_id %s' % app_id)
+        distribution_type = 'limited adhoc store'.split()[profile_type]
+        if profile_type == self.PROFILE_TYPE_DEVELOPMENT:
+            distribution_type_label = 'Distribution'
+        else:
+            distribution_type_label = 'Development'
+        app_id = self.get_app_id(app_id)
+        if certificates is None:
+            if profile_type == API.PROFILE_TYPE_DEVELOPMENT:
+                cert_type = API.CERT_TYPE_IOS_DEVELOPMENT
+            else:
+                cert_type = API.CERT_TYPE_IOS_DISTRIBUTION
+            certificates = self.list_cert_requests(cert_type)
+        certificates = self._unwrap(certificates, 'certificateId')
+        devices = self._unwrap(devices or (), 'deviceId')
+        if not name:
+            name = '%s %s' % (app_id['name'],
+                'Development AdHoc AppStore'.split()[profile_type])
+
+        form = []
+        form.append(('distributionType', distribution_type))
+        form.append(('appIdId', app_id['appIdId']))
+        form.append(('certificateIds', self._format_list(certificates)))
+        for device in devices:
+            form.append(('devices', device))
+        if devices:
+            form.append(('deviceIds', self._format_list(devices)))
+        form.append(('template', ''))
+        form.append(('returnFullObjects', 'false'))
+        form.append(('provisioningProfileName', name))
+        form.append(('distributionTypeLabel', distribution_type_label))
+        form.append(('appIdName', app_id['name']))
+        form.append(('appIdPrefix', app_id['prefix']))
+        form.append(('appIdIdentifier', app_id['identifier']))
+        form.append(('certificateCount', len(certificates)))
+        form.append(('deviceCount', len(devices) if devices else ''))
+        data = self._api("profile/createProvisioningProfile", form=form)
+        return data['provisioningProfile']
+
+    def delete_provisioning_profile(self, profile):
+        profile = self._unwrap(profile, 'provisioningProfileId')
+        self._api('profile/deleteProvisioningProfile',
+            provisioningProfileId=profile)
+
+    def _format_list(self, objs):
+        if objs:
+            return '[%s]' % ','.join(objs)
+        return ''
+
+    def _unwrap(self, obj, key):
+        if obj is None:
+            return obj
+        if isinstance(obj, (list, tuple)):
+            return [ self._unwrap(o, key) for o in obj ]
+        if isinstance(obj, basestring):
+            return obj
+        return obj[key]
 
     def update_provisioning_profile(self, profile, name=None, app_id=None,
             certificate_ids=None, device_ids=None, distribution_type=None):
@@ -247,12 +345,37 @@ class API(object):
             raise e
 
     def profile_type(self, profile):
+        if isinstance(profile, int):
+            if not 0 <= profile < len(API._PROFILE_TYPE_LABELS):
+                raise APIException('Invalid profile type %s' % profile)
+            return profile
+        if isinstance(profile, basestring):
+            try:
+                return self.profile_type(int(profile))
+            except ValueError:
+                pass
+            try:
+                return API._PROFILE_TYPE_LABELS.index(profile)
+            except ValueError:
+                raise APIException("Invalid profile type '%s'" % profile)
+        if not isinstance(profile, dict):
+            raise APIException('Invalid  profile %s' % profile)
         if profile['type'] == 'Development':
-            return 'development'
-        return 'adhoc' if profile['deviceCount'] else 'appstore'
+            return API.PROFILE_TYPE_DEVELOPMENT
+        if profile['deviceCount']:
+            return API.PROFILE_TYPE_ADHOC
+        return API.PROFILE_TYPE_APPSTORE
+
+    def profile_type_name(self, profile):
+        return API._PROFILE_TYPE_LABELS[self.profile_type(profile)]
 
     def is_profile_expired(self, profile):
         return profile['status'] == 'Expired'
+
+    PROFILE_TYPE_DEVELOPMENT = 0
+    PROFILE_TYPE_ADHOC = 1
+    PROFILE_TYPE_APPSTORE = 2
+    _PROFILE_TYPE_LABELS = 'development adhoc appstore'.split()
 
     ALL_CERT_TYPES = "5QPB9NHCEI,R58UK2EWSO,9RQEK7MSXA,LA30L5BJEU,BKLRAVXMGM,3BQKVH9I2X,Y3B2F3TYSI"
     (CERT_TYPE_IOS_DEVELOPMENT, CERT_TYPE_IOS_DISTRIBUTION,
