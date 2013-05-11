@@ -20,7 +20,11 @@ Certificate Management:
   portal listCertificates [-v | -r]
 
 Device Management:
-  portal listDevices [-v | -r]
+  portal listDevices [-v | -r] <filter-criteria>
+  portal addDevice [-m name] udid
+  portal deleteDevice <filter-criteria>
+  portal enableDevice <filter-criteria>
+  filter-criteria: [-m nameregex] [-u udidregex] [ID...]
 
 App ID Management
   portal listApps [-v | -r]
@@ -30,22 +34,24 @@ Provisioning Profile Management:
   portal getProfile [-a | -i ID] [-o OUTPUT] [-q]
   portal regenerateProfile [-v | -q] [-n] [-a | [ID...]]
   portal deleteProfile [-q] [-n] <filter-criteria>
-  filter-criteria: [-t type] [-i appId] [-r nameregex] [ID...]
+  filter-criteria: [-t type] [-i appId] [-m nameregex] [ID...]
     """)
 
 def camelcase_to_underscore(name):
-    import re
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 CMDS = {
     'listCertificates': dict(getopt='vr'),
-    'listDevices': dict(getopt='vr'),
+    'listDevices': dict(getopt='vrm:u:'),
+    'addDevice': dict(argc=1, getopt='m:'),
+    'deleteDevice': dict(getopt='nqm:u:'),
+    'enableDevice': dict(getopt='nqm:u:'),
     'listApps': dict(getopt='vr'),
-    'listProfiles': dict(getopt='vrt:i:r:'),
+    'listProfiles': dict(getopt='vrt:i:m:'),
     'getProfile': dict(getopt='qai:o:'),
     'regenerateProfile': dict(getopt='qanv'),
-    'deleteProfile': dict(getopt='nqt:i:r:'),
+    'deleteProfile': dict(getopt='nqt:i:m:'),
 }
 
 def main():
@@ -112,19 +118,71 @@ def cmd_list_apps():
                 app.update({'f%d' % i: 'X' for i, k in enumerate(fkeys) if features[k]})
             print '\t'.join(app.get(k, '') for k in keys)
 
-def cmd_list_devices():
+def cmd_list_devices(*args):
+    rc = 0
     keys = ('deviceId status deviceNumber name' if 'v' in opts else
             'deviceNumber name').split()
-    for device in api.all_devices():
+    for device in _filter_devices(args, include_all=True):
+        if isinstance(device, basestring):
+            print >>sys.stderr, "Device '%s' not found" % device
+            rc = 1
+            continue
         if 'r' in opts:
             print device
         else:
             print '\t'.join(device[k] for k in keys)
+    return rc
+
+def cmd_add_device(udid):
+    api.add_device(udid, name=opts.get('m'))
+
+def cmd_delete_device(*args):
+    rc = 0
+    for device in _filter_devices(args):
+        if isinstance(device, dict):
+            if 'q' not in opts:
+                print >>sys.stderr, "Deleting device '%s'" % device['deviceNumber']
+            if 'n' not in opts:
+                api.delete_device(device)
+        else:
+            print >>sys.stderr, "Device '%s' not found" % device
+            rc = 1
+    return rc
+
+def cmd_enable_device(*args):
+    rc = 0
+    for device in _filter_devices(args):
+        if isinstance(device, dict):
+            if 'q' not in opts:
+                print >>sys.stderr, "Enabling device '%s'" % device['deviceNumber']
+            if 'n' not in opts:
+                api.enable_device(device)
+        else:
+            print >>sys.stderr, "Device '%s' not found" % device
+            rc = 1
+    return rc
+
+def _filter_devices(args, include_all=False):
+    if not args and ('m' in opts or 'u' in opts or include_all):
+        devices = api.all_devices()
+    else:
+        devices = api.get_device(args, return_id_if_missing=True)
+    if 'm' in opts:
+        devices = [ d for d in devices
+                    if not isinstance(d, dict) or
+                        re.search(opts['m'], d['name'], re.I) ]
+    if 'u' in opts:
+        devices = [ d for d in devices
+                    if not isinstance(d, dict) or
+                        re.search(opts['u'], d['deviceNumber'], re.I) ]
+    return devices
 
 def cmd_list_profiles(*args):
+    rc = 0
     for profile in _filter_profiles(args, include_all=True):
         if isinstance(profile, basestring):
             print >>sys.stderr, "Profile '%s' not found" % profile
+            rc = 1
             continue
         if 'r' in opts:
             print profile
@@ -144,6 +202,7 @@ def cmd_list_profiles(*args):
                 api.profile_type_name(profile),
                 profile['appId']['identifier'],
                 profile['name']))
+    return rc
 
 def cmd_get_profile():
     if 'a' in opts:
@@ -200,6 +259,7 @@ def cmd_regenerate_profile(*args):
                     device_ids=devs, certificate_ids=certs)
 
 def cmd_delete_profile(*args):
+    rc = 0
     for profile in _filter_profiles(args):
         if isinstance(profile, dict):
             if 'q' not in opts:
@@ -208,16 +268,18 @@ def cmd_delete_profile(*args):
                 api.delete_provisioning_profile(profile)
         else:
             print >>sys.stderr, "Profile '%s' not found" % profile
+            rc = 1
+    return rc
 
 def _filter_profiles(args, include_all=False):
-    if not args and ('r' in opts or 'i' in opts or 't' in opts or include_all):
+    if not args and ('m' in opts or 'i' in opts or 't' in opts or include_all):
         profiles = api.all_provisioning_profiles()
     else:
         profiles = api.get_provisioning_profile(args, return_id_if_missing=True)
-    if 'r' in opts:
+    if 'm' in opts:
         profiles = [ p for p in profiles
                      if not isinstance(p, dict) or
-                         re.match(opts['r'], p['name']) ]
+                         re.search(opts['m'], p['name'], re.I) ]
     if 'i' in opts:
         profiles = [ p for p in profiles
                      if not isinstance(p, dict) or

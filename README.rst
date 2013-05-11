@@ -16,7 +16,11 @@ Usage::
     portal listCertificates [-v | -r]
 
   Device Management:
-    portal listDevices [-v | -r]
+    portal listDevices [-v | -r] <filter-criteria>
+    portal addDevice [-m name] udid
+    portal deleteDevice <filter-criteria>
+    portal enableDevice <filter-criteria>
+    filter-criteria: [-m nameregex] [-u udidregex] [ID...]
 
   App ID Management
     portal listApps [-v | -r]
@@ -26,7 +30,7 @@ Usage::
     portal getProfile [-a | -i ID] [-o OUTPUT] [-q]
     portal regenerateProfile [-v | -q] [-n] [-a | [ID...]]
     portal deleteProfile [-q] [-n] <filter-criteria>
-    filter-criteria: [-t type] [-i appId] [-r nameregex] [ID...]
+    filter-criteria: [-t type] [-i appId] [-m nameregex] [ID...]
 
 
 
@@ -60,3 +64,7 @@ Sample usage::
   api.download_profile(profile, path) # Download a provisioning profile
   api.delete_provisioning_profile(...)
   api.create_provisioning_profile(...)
+  api.get_device(device_id)
+  api.add_device(udid, name=None)
+  api.delete_device(device_id_or_obj)
+  api.enable_device(device_id_or_obj)

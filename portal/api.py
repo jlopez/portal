@@ -215,6 +215,54 @@ class API(object):
     def all_devices(self):
         return self._list_devices()
 
+    def get_device(self, device, return_id_if_missing=False):
+        if isinstance(device, (list, tuple)):
+            return [ self.get_device(d,
+                     return_id_if_missing=return_id_if_missing)
+                     for d in device ]
+        if isinstance(device, dict):
+            return device
+        if not isinstance(device, basestring):
+            raise APIException('invalid device %s' % device)
+        try:
+            if re.match('[0-9a-f]{40}', device, re.I):
+                return next(d for d in self.all_devices()
+                            if d['deviceNumber'] == device)
+            else:
+                return next(d for d in self.all_devices()
+                            if d['deviceId'] == device)
+        except StopIteration:
+            if return_id_if_missing:
+                return device
+            return None
+
+    def add_device(self, udid, name=None):
+        name = name or udid
+        form = []
+        form.append(('register', 'single'))
+        form.append(('name', name))
+        form.append(('deviceNumber', udid))
+        form.append(('deviceNames', name))
+        form.append(('deviceNumbers', udid))
+        data = self._api("device/addDevice", form=form)
+        return data['device']
+
+    def delete_device(self, device):
+        if not isinstance(device, (basestring, dict)):
+            raise APIException('invalid device %s' % device)
+        device = self.get_device(device)
+        self._api('device/deleteDevice',
+                deviceId=device['deviceId'])
+
+    def enable_device(self, device):
+        if not isinstance(device, (basestring, dict)):
+            raise APIException('invalid device %s' % device)
+        device = self.get_device(device)
+        data = self._api('device/enableDevice',
+                displayId=device['deviceId'],
+                deviceNumber=device['deviceNumber'])
+        return data['device']
+
     @cached_method
     def all_provisioning_profiles(self):
         return self._list_provisioning_profiles()

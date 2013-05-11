@@ -12,3 +12,10 @@ Version 0.2
 
 - Add ability to create and delete provisioning profiles
 - Improve command line profile listing to support filtering
+
+Version 0.3
+-----------
+
+- Add ability to create, delete and enable devices
+- Fix command line regex matching to be case insensitive
+- Standardize command line switch usage
