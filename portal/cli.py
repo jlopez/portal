@@ -206,6 +206,7 @@ def cmd_list_profiles(*args):
 
 def cmd_get_profile():
     if 'a' in opts:
+        lf_pending = False
         if 'i' in opts:
             raise CLIError("-i may not be specified with -a")
         path = opts.get('o', os.getcwd())
@@ -220,9 +221,10 @@ def cmd_get_profile():
             api.download_profile(profile, filename)
             if 'q' not in opts:
                 print >>sys.stderr, '\rDownloading %d/%d profiles (%d%%)' % (
-                        ix, len(profiles), ix * 100 / len(profiles)),
-        if 'q' not in opts:
-            print >>sys.stderr, '\n'
+                        ix + 1, len(profiles), (ix + 1) * 100 / len(profiles)),
+                lf_pending = True
+        if lf_pending:
+            print >>sys.stderr
     elif 'i' in opts:
         api.download_profile(opts['i'], opts.get('o', sys.stdout))
     else:
@@ -231,6 +233,7 @@ def cmd_get_profile():
 def cmd_regenerate_profile(*args):
     if not args and 'a' not in opts:
         raise CLIError('Must specify at least one profile (or use -a)')
+    lf_pending = False
     dev_certs = api.list_cert_requests(typ=api.CERT_TYPE_IOS_DEVELOPMENT)
     dist_certs = api.list_cert_requests(typ=api.CERT_TYPE_IOS_DISTRIBUTION)
     devices = api.all_devices()
@@ -250,13 +253,16 @@ def cmd_regenerate_profile(*args):
         certs = dev_certs if profile_type == 'development' else dist_certs
         if 'v' not in opts and 'q' not in opts:
             print >>sys.stderr, '\rRegenerating %d/%d profiles (%d%%)' % (
-                    ix, len(profiles), ix * 100 / len(profiles)),
+                    ix + 1, len(profiles), (ix + 1 ) * 100 / len(profiles)),
+            lf_pending = True
         if 'v' in opts:
-            print >>sys.stderr, '\rRegenerating %s (%s)' % (
+            print >>sys.stderr, 'Regenerating %s (%s)' % (
                     profile_id, profile['name'])
         if 'n' not in opts:
             api.update_provisioning_profile(profile,
                     device_ids=devs, certificate_ids=certs)
+    if lf_pending:
+        print >>sys.stderr
 
 def cmd_delete_profile(*args):
     rc = 0
