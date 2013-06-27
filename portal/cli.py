@@ -32,7 +32,7 @@ App ID Management
 Provisioning Profile Management:
   portal listProfiles [-v | -r] <filter-criteria>
   portal getProfile [-a | -i ID] [-o OUTPUT] [-q]
-  portal regenerateProfile [-v | -q] [-n] [-a | [ID...]]
+  portal regenerateProfile [-v | -q] [-n] ( [-a] | <filter-criteria> )
   portal deleteProfile [-q] [-n] <filter-criteria>
   filter-criteria: [-t type] [-i appId] [-m nameregex] [ID...]
     """)
@@ -50,7 +50,7 @@ CMDS = {
     'listApps': dict(getopt='vr'),
     'listProfiles': dict(getopt='vrt:i:m:'),
     'getProfile': dict(getopt='qai:o:'),
-    'regenerateProfile': dict(getopt='qanv'),
+    'regenerateProfile': dict(getopt='vqnat:i:m:'),
     'deleteProfile': dict(getopt='nqt:i:m:'),
 }
 
@@ -68,6 +68,11 @@ def main():
         fn_name = 'cmd_%s' % camelcase_to_underscore(cmd).replace('-', '_')
         cmd_fn = globals()[fn_name]
         args = sys.argv
+        spec = cmd_entry.get('getopt', '')
+        spec = 'd' + spec
+        optlist, args = getopt.getopt(args, spec)
+        opts.update(dict((o[1:], a or True) for o, a in optlist))
+        api.debug = 'd' in opts
         argc_spec = cmd_entry.get('argc')
         if argc_spec:
             argc = len(args)
@@ -76,11 +81,6 @@ def main():
             if not argc_spec[0] <= argc <= argc_spec[1]:
                 error("Incorrect args for '%s': Got %s, expected %s" %
                     (cmd, argc, argc_spec))
-        spec = cmd_entry.get('getopt', '')
-        spec = 'd' + spec
-        optlist, args = getopt.getopt(args, spec)
-        opts.update(dict((o[1:], a or True) for o, a in optlist))
-        api.debug = 'd' in opts
         if not cmd_entry.get('no_login', False):
             api.login()
         return cmd_fn(*args)
@@ -237,7 +237,7 @@ def cmd_regenerate_profile(*args):
     dev_certs = api.list_cert_requests(typ=api.CERT_TYPE_IOS_DEVELOPMENT)
     dist_certs = api.list_cert_requests(typ=api.CERT_TYPE_IOS_DISTRIBUTION)
     devices = api.all_devices()
-    profiles =  api.all_provisioning_profiles()
+    profiles =  list(_filter_profiles(args, include_all='a' in opts))
     for ix, profile in enumerate(profiles):
         profile_id = profile['provisioningProfileId']
         if 'a' not in opts and profile_id not in args:

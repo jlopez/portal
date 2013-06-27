@@ -28,7 +28,7 @@ Usage::
   Provisioning Profile Management:
     portal listProfiles [-v | -r] <filter-criteria>
     portal getProfile [-a | -i ID] [-o OUTPUT] [-q]
-    portal regenerateProfile [-v | -q] [-n] [-a | [ID...]]
+    portal regenerateProfile [-v | -q] [-n] ( [-a] | <filter-criteria> )
     portal deleteProfile [-q] [-n] <filter-criteria>
     filter-criteria: [-t type] [-i appId] [-m nameregex] [ID...]
 
