@@ -16,6 +16,9 @@ def error(msg):
 def usage():
     error("""usage: portal CMD [OPTS...] [ARGS...]
 
+Global options:
+  -d              enable API debug mode
+
 Certificate Management:
   portal listCertificates [-v | -r]
 
