@@ -35,6 +35,10 @@ Provisioning Profile Management:
   portal regenerateProfile [-v | -q] [-n] ( [-a] | <filter-criteria> )
   portal deleteProfile [-q] [-n] <filter-criteria>
   filter-criteria: [-t type] [-i appId] [-m nameregex] [ID...]
+
+Miscellaneous:
+  portal whoami
+
     """)
 
 def camelcase_to_underscore(name):
@@ -52,6 +56,7 @@ CMDS = {
     'getProfile': dict(getopt='qai:o:'),
     'regenerateProfile': dict(getopt='vqnat:i:m:'),
     'deleteProfile': dict(getopt='nqt:i:m:'),
+    'whoami': dict(argc=0),
 }
 
 def main():
@@ -296,3 +301,6 @@ def _filter_profiles(args, include_all=False):
                      if not isinstance(p, dict) or
                          api.profile_type(p) == profile_type ]
     return profiles
+
+def cmd_whoami(*args):
+    print '%s (%s)' % (api.user, api.team_id)

@@ -32,6 +32,8 @@ Usage::
     portal deleteProfile [-q] [-n] <filter-criteria>
     filter-criteria: [-t type] [-i appId] [-m nameregex] [ID...]
 
+  Miscellaneous:
+    portal whoami
 
 
 API

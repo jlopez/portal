@@ -101,7 +101,8 @@ class API(object):
                 if self._debug:
                     print >>sys.stderr, "Login failed, page contents:\n%s" % page
                 raise APIException("Login failed, please check credentials (using %s)" % user)
-            self._team_id = matcher.group(1)
+            self.team_id = matcher.group(1)
+            self.user = user
         except urllib2.URLError as e:
             raise e
 
@@ -113,7 +114,7 @@ class API(object):
             kwargs['accept'] = 'application/json'
             kwargs['requestId'] = str(uuid.uuid4())
             kwargs['userLocale'] = 'en_US'
-            kwargs['teamId'] = self._team_id
+            kwargs['teamId'] = self.team_id
             query = urllib.urlencode(kwargs)
             url = "%s/%s?%s" % (self.DEVELOPER_SERVICES_URL, cmd, query)
             response = self._opener.open(url, form)
