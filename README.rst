@@ -35,6 +35,9 @@ Usage::
   Miscellaneous:
     portal whoami
 
+    PORTAL_ENVIRONMENT  Environment variable with .portalrc section to use
+                        when connecting to the provisioning portal (defaults
+                        to "Default" if unset)
 
 API
 ---

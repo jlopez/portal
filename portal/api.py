@@ -150,12 +150,14 @@ class API(object):
                 path = os.path.dirname(path)
 
         import ConfigParser
+        group = os.environ.get('PORTAL_ENVIRONMENT', 'Default')
         try:
             cfg = ConfigParser.RawConfigParser()
             cfg.read(search_path())
-            return cfg.get('Main', 'user'), cfg.get('Main', 'password')
+            return cfg.get(group, 'user'), cfg.get(group, 'password')
         except ConfigParser.Error:
-            raise APIException('Missing credentials (.portalrc / PORTAL_CREDENTIALS)')
+            raise APIException('Missing credentials '
+                '(.portalrc section [%s] / PORTAL_CREDENTIALS)' % group)
 
     def _list_cert_requests(self):
         data = self._api("certificate/listCertRequests", certificateStatus=0,
